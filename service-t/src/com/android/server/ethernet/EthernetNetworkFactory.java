@@ -37,6 +37,7 @@ import android.net.IpConfiguration.ProxySettings;
 import android.net.LinkProperties;
 import android.net.NetworkAgentConfig;
 import android.net.NetworkCapabilities;
+import android.os.SystemProperties;
 import android.net.NetworkProvider;
 import android.net.NetworkRequest;
 import android.net.NetworkScore;
@@ -79,6 +80,8 @@ public class EthernetNetworkFactory {
     final static boolean DBG = true;
 
     private static final String NETWORK_TYPE = "Ethernet";
+    private static final String BST_NETWORK_TYPE = "WIFI";
+    private static final boolean BST_CHANGES_ENABLED = (SystemProperties.getInt("bst.config.modify_network", 1) > 0 ? true : false);
 
     private final ConcurrentHashMap<String, NetworkInterfaceState> mTrackingInterfaces =
             new ConcurrentHashMap<>();
@@ -676,11 +679,25 @@ public class EthernetNetworkFactory {
             final NetworkCapabilities capabilities;
             if (mMode == Mode.GLOBAL) {
                 // Only configure legacy config options for global mode.
-                networkAgentConfig = new NetworkAgentConfig.Builder()
-                        .setLegacyType(mLegacyType)
-                        .setLegacyTypeName(NETWORK_TYPE)
-                        .setLegacyExtraInfo(mPort.getMacAddress().toString())
-                        .build();
+                // BS-A16: Ported from A13. Disguise ethernet as WiFi.
+                // Apps (Play Store, etc.) check for WiFi connectivity before
+                // allowing network operations. BlueStacks uses ethernet which
+                // Android reports as TYPE_ETHERNET, so these apps refuse to
+                // connect. Setting LegacyType to TYPE_WIFI makes the ethernet
+                // connection appear as WiFi to legacy apps and ConnectivityManager
+                // checks. Controlled by bst.config.modify_network (default 1=enabled).
+                if (BST_CHANGES_ENABLED) {
+                    networkAgentConfig = new NetworkAgentConfig.Builder()
+                            .setLegacyType(ConnectivityManager.TYPE_WIFI)
+                            .setLegacyTypeName(BST_NETWORK_TYPE)
+                            .build();
+                } else {
+                    networkAgentConfig = new NetworkAgentConfig.Builder()
+                            .setLegacyType(mLegacyType)
+                            .setLegacyTypeName(NETWORK_TYPE)
+                            .setLegacyExtraInfo(mPort.getMacAddress().toString())
+                            .build();
+                }
                 capabilities = mCapabilities;
             } else {
                 networkAgentConfig = new NetworkAgentConfig.Builder().build();

@@ -22,6 +22,12 @@ import android.content.ApexEnvironment;
 import android.net.IpConfiguration;
 import android.os.Environment;
 import android.util.ArrayMap;
+import android.os.SystemProperties;
+import android.net.NetworkUtils;
+import android.net.LinkAddress;
+import android.net.IpConfiguration.IpAssignment;
+import android.net.IpConfiguration.ProxySettings;
+import android.net.StaticIpConfiguration;
 import android.util.AtomicFile;
 import android.util.Log;
 
@@ -88,6 +94,14 @@ public class EthernetConfigStore {
     @VisibleForTesting
     void read(final String newFilePath, final String oldFilePath, final String filename) {
         synchronized (mSync) {
+            // BS-A16: Ported from A13. When bst.config.modify_network is enabled
+            // use BlueStacks static IP configuration (guest IP/gateway/DNS from
+            // system properties) instead of DHCP. Without this, ethernet cannot get
+            // an IP address in the BlueStacks NAT environment.
+            if (SystemProperties.getInt("bst.config.modify_network", 1) > 0) {
+                bstLoadStaticConfig();
+                return;
+            }
             // Attempt to read the IP configuration from apex file path first.
             if (doesConfigFileExist(newFilePath + filename)) {
                 loadConfigFileLocked(newFilePath + filename);
@@ -112,6 +126,25 @@ public class EthernetConfigStore {
             Log.e(TAG, "IpConfigStore#readIpConfigurations() returned null");
             return;
         }
+        mIpConfigurations.putAll(configs);
+    }
+
+    private void bstLoadStaticConfig() {
+        ArrayMap<String, IpConfiguration> configs = new ArrayMap<>();
+        StaticIpConfiguration staticIpConfiguration = new StaticIpConfiguration();
+        LinkAddress linkAddr = new LinkAddress(
+                NetworkUtils.numericToInetAddress(
+                        SystemProperties.get("bst.status.ip_guest_addr", "10.0.2.15")),
+                SystemProperties.getInt("bst.status.ip_addr_prefix_len", 24));
+        staticIpConfiguration.ipAddress = linkAddr;
+        staticIpConfiguration.gateway = NetworkUtils.numericToInetAddress(
+                SystemProperties.get("bst.status.ip_gateway_addr", "10.0.2.2"));
+        staticIpConfiguration.dnsServers.add(NetworkUtils.numericToInetAddress(
+                SystemProperties.get("bst.dns_server", "8.8.8.8")));
+        staticIpConfiguration.dnsServers.add(NetworkUtils.numericToInetAddress(
+                SystemProperties.get("bst.dns_server2", "10.0.2.3")));
+        configs.put("0", new IpConfiguration(IpAssignment.STATIC,
+                ProxySettings.NONE, staticIpConfiguration, null));
         mIpConfigurations.putAll(configs);
     }
 

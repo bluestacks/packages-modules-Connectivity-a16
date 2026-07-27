@@ -21,6 +21,7 @@ import static android.net.EthernetManager.ETHERNET_STATE_ENABLED;
 import static android.net.NetworkCapabilities.TRANSPORT_ETHERNET;
 import static android.net.NetworkCapabilities.TRANSPORT_LOWPAN;
 import static android.net.NetworkCapabilities.TRANSPORT_VPN;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI_AWARE;
 import static android.net.TestNetworkManager.TEST_TAP_PREFIX;
 import static android.net.EthernetManager.TEST_INTERFACE_MODE_NONE;
@@ -47,6 +48,8 @@ import android.net.NetworkCapabilities;
 import android.net.StaticIpConfiguration;
 import android.os.ConditionVariable;
 import android.os.Handler;
+import android.os.SystemProperties;
+import com.bluestacks.os.IBstFilterAppsService;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.system.ErrnoException;
@@ -125,8 +128,18 @@ public class EthernetTracker {
     private static final SharedLog sLog = new SharedLog(TAG);
 
     @VisibleForTesting
-    public static final NetworkCapabilities DEFAULT_CAPABILITIES = new NetworkCapabilities.Builder()
-                        .addTransportType(TRANSPORT_ETHERNET)
+    // BS-A16: Ported from A13. When bst.config.modify_network is enabled,
+    // use TRANSPORT_WIFI instead of TRANSPORT_ETHERNET so Android apps
+    // detect a WiFi connection and allow network operations.
+    public static final NetworkCapabilities DEFAULT_CAPABILITIES;
+    static {
+        NetworkCapabilities.Builder capsBuilder = new NetworkCapabilities.Builder();
+        if (SystemProperties.getInt("bst.config.modify_network", 1) > 0) {
+            capsBuilder.addTransportType(TRANSPORT_WIFI);
+        } else {
+            capsBuilder.addTransportType(TRANSPORT_ETHERNET);
+        }
+        DEFAULT_CAPABILITIES = capsBuilder
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED)
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
@@ -138,6 +151,7 @@ public class EthernetTracker {
                         .setLinkUpstreamBandwidthKbps(100 * 1000 /* 100 Mbps */)
                         .setLinkDownstreamBandwidthKbps(100 * 1000 /* 100 Mbps */)
                         .build();
+    }
 
 
     /**
