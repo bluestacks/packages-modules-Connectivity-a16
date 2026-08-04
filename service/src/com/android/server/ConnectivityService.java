@@ -5470,9 +5470,15 @@ public class ConnectivityService extends IConnectivityManager.Stub
                 return ConnectivitySettingsManager.CAPTIVE_PORTAL_MODE_PROMPT;
             }
 
-            return Settings.Global.getInt(mContext.getContentResolver(),
+            final int defaultMode = "nxt_cn".equals(SystemProperties.get("bst.oem", ""))
+                    ? ConnectivitySettingsManager.CAPTIVE_PORTAL_MODE_IGNORE
+                    : ConnectivitySettingsManager.CAPTIVE_PORTAL_MODE_PROMPT;
+            final int mode = Settings.Global.getInt(mContext.getContentResolver(),
                     ConnectivitySettingsManager.CAPTIVE_PORTAL_MODE,
-                    ConnectivitySettingsManager.CAPTIVE_PORTAL_MODE_PROMPT);
+                    defaultMode);
+            log("bst.oem=" + SystemProperties.get("bst.oem", "")
+                    + ", captivePortalMode=" + mode);
+            return mode;
         }
 
         private boolean maybeHandleNetworkAgentInfoMessage(Message msg) {
