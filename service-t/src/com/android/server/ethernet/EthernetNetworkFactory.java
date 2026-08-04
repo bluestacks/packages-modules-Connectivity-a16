@@ -48,6 +48,7 @@ import android.net.shared.ProvisioningConfiguration;
 import android.os.ConditionVariable;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemProperties;
 import android.text.TextUtils;
 import android.util.AndroidRuntimeException;
 import android.util.ArraySet;
@@ -79,6 +80,7 @@ public class EthernetNetworkFactory {
     final static boolean DBG = true;
 
     private static final String NETWORK_TYPE = "Ethernet";
+    private static final String BST_NETWORK_TYPE = "WIFI";
 
     private final ConcurrentHashMap<String, NetworkInterfaceState> mTrackingInterfaces =
             new ConcurrentHashMap<>();
@@ -88,6 +90,10 @@ public class EthernetNetworkFactory {
     final Dependencies mDeps;
 
     public static class Dependencies {
+        public boolean isBstNetworkPresentationEnabled() {
+            return SystemProperties.getInt("bst.config.modify_network", 1) > 0;
+        }
+
         public void makeIpClient(Context context, String iface, IpClientCallbacks callbacks) {
             IpClientUtil.makeIpClient(context, iface, callbacks);
         }
@@ -676,11 +682,18 @@ public class EthernetNetworkFactory {
             final NetworkCapabilities capabilities;
             if (mMode == Mode.GLOBAL) {
                 // Only configure legacy config options for global mode.
-                networkAgentConfig = new NetworkAgentConfig.Builder()
-                        .setLegacyType(mLegacyType)
-                        .setLegacyTypeName(NETWORK_TYPE)
-                        .setLegacyExtraInfo(mPort.getMacAddress().toString())
-                        .build();
+                if (mDeps.isBstNetworkPresentationEnabled()) {
+                    networkAgentConfig = new NetworkAgentConfig.Builder()
+                            .setLegacyType(ConnectivityManager.TYPE_WIFI)
+                            .setLegacyTypeName(BST_NETWORK_TYPE)
+                            .build();
+                } else {
+                    networkAgentConfig = new NetworkAgentConfig.Builder()
+                            .setLegacyType(mLegacyType)
+                            .setLegacyTypeName(NETWORK_TYPE)
+                            .setLegacyExtraInfo(mPort.getMacAddress().toString())
+                            .build();
+                }
                 capabilities = mCapabilities;
             } else {
                 networkAgentConfig = new NetworkAgentConfig.Builder().build();

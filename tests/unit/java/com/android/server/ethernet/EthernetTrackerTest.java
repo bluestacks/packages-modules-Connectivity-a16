@@ -228,6 +228,13 @@ public class EthernetTrackerTest {
     }
 
     @Test
+    public void testNetworkCapabilityParsing_bstPresentationUsesWifi() {
+        final EthernetConfigParser p = new EthernetConfigParser(
+                "eth0;", true /* isAtLeastB */, false /* exposeEthernetTransport */);
+        assertThat(p.mCaps.hasSingleTransport(NetworkCapabilities.TRANSPORT_WIFI)).isTrue();
+    }
+
+    @Test
     public void testInterfaceNameParsing() {
         EthernetConfigParser p = new EthernetConfigParser("eth12", false /*isAtLeastB*/);
         assertThat(p.mIface).isEqualTo("eth12");

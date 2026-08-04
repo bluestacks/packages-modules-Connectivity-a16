@@ -396,6 +396,15 @@ public class EthernetNetworkFactoryTest {
     }
 
     @Test
+    public void testBstNetworkPresentationUsesWifiLegacyType() throws Exception {
+        when(mDeps.isBstNetworkPresentationEnabled()).thenReturn(true);
+        initEthernetNetworkFactory();
+
+        createVerifyAndRemoveProvisionedInterface(NetworkCapabilities.TRANSPORT_ETHERNET,
+                ConnectivityManager.TYPE_WIFI);
+    }
+
+    @Test
     public void testReachabilityLoss() throws Exception {
         initEthernetNetworkFactory();
         createAndVerifyProvisionedInterface(TEST_IFACE);

@@ -21,6 +21,7 @@ import static android.net.EthernetManager.ETHERNET_STATE_ENABLED;
 import static android.net.NetworkCapabilities.TRANSPORT_ETHERNET;
 import static android.net.NetworkCapabilities.TRANSPORT_LOWPAN;
 import static android.net.NetworkCapabilities.TRANSPORT_VPN;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI_AWARE;
 import static android.net.TestNetworkManager.TEST_TAP_PREFIX;
 import static android.net.EthernetManager.TEST_INTERFACE_MODE_NONE;
@@ -72,8 +73,10 @@ import com.android.net.module.util.netlink.RtNetlinkLinkMessage;
 import com.android.net.module.util.netlink.StructIfinfoMsg;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
 import com.android.server.connectivity.ConnectivityResources;
+import com.bluestacks.os.IBstFilterAppsService;
 
 import java.io.FileDescriptor;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -848,7 +851,8 @@ public class EthernetTracker {
      */
     private void parseEthernetConfig(String configString) {
         final EthernetConfigParser config =
-                new EthernetConfigParser(configString, mDeps.isAtLeastB());
+                new EthernetConfigParser(configString, mDeps.isAtLeastB(),
+                        EthernetConfigParser.shouldExposeEthernetTransport());
         mNetworkCapabilities.put(config.mIface, config.mCaps);
 
         if (null != config.mIpConfig) {
@@ -1057,9 +1061,12 @@ public class EthernetTracker {
             return builder.build();
         }
 
-        private static int parseTransportType(@Nullable String transportString) {
+        private static int parseTransportType(@Nullable String transportString,
+                boolean exposeEthernetTransport) {
+            final int defaultTransport = exposeEthernetTransport
+                    ? TRANSPORT_ETHERNET : TRANSPORT_WIFI;
             if (TextUtils.isEmpty(transportString)) {
-                return TRANSPORT_ETHERNET;
+                return defaultTransport;
             }
 
             final int parsedTransport;
@@ -1067,11 +1074,11 @@ public class EthernetTracker {
                 parsedTransport = Integer.valueOf(transportString);
             } catch (NumberFormatException e) {
                 Log.e(TAG, "Failed to parse transport type", e);
-                return TRANSPORT_ETHERNET;
+                return defaultTransport;
             }
 
             if (!NetworkCapabilities.isValidTransport(parsedTransport)) {
-                return TRANSPORT_ETHERNET;
+                return defaultTransport;
             }
 
             switch (parsedTransport) {
@@ -1079,9 +1086,23 @@ public class EthernetTracker {
                 case TRANSPORT_WIFI_AWARE:
                 case TRANSPORT_LOWPAN:
                     Log.e(TAG, "Unsupported transport type '" + parsedTransport + "'");
-                    return TRANSPORT_ETHERNET;
+                    return defaultTransport;
                 default:
                     return parsedTransport;
+            }
+        }
+
+        private static boolean shouldExposeEthernetTransport() {
+            try {
+                // ServiceManager and the BlueStacks service name are hidden from this module.
+                final Class<?> serviceManager = Class.forName("android.os.ServiceManager");
+                final Method getService = serviceManager.getMethod("getService", String.class);
+                final IBstFilterAppsService bstFilter = IBstFilterAppsService.Stub.asInterface(
+                        (android.os.IBinder) getService.invoke(null, "bstfilterapps"));
+                return bstFilter != null && bstFilter.isEtherNetType("system_server");
+            } catch (Exception e) {
+                Log.w(TAG, "Unable to query BlueStacks Ethernet presentation", e);
+                return false;
             }
         }
 
@@ -1133,12 +1154,17 @@ public class EthernetTracker {
         }
 
         EthernetConfigParser(String configString, boolean bplus) {
+            this(configString, bplus, true);
+        }
+
+        EthernetConfigParser(String configString, boolean bplus, boolean exposeEthernetTransport) {
             Objects.requireNonNull(configString, "EthernetConfigParser requires non-null config");
             final String[] t = configString.split(";", /* limit of tokens */ 4);
             mIface = t[0];
 
             final NetworkCapabilities nc = parseCapabilities(t.length > 1 ? t[1] : null, bplus);
-            final int transportType = parseTransportType(t.length > 3 ? t[3] : null);
+            final int transportType = parseTransportType(
+                    t.length > 3 ? t[3] : null, exposeEthernetTransport);
             nc.addTransportType(transportType);
             mCaps = nc;
 
