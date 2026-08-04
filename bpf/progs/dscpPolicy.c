@@ -162,6 +162,7 @@ static inline __always_inline void match_policy(struct __sk_buff* skb, const boo
     uint64_t best_score = 0;
     int8_t new_dscp = -1;  // meaning no mutation
 
+#pragma unroll
     for (register uint64_t i = 0; i < MAX_POLICIES; i++) {
         // Using a uint64 in for loop prevents infinite loop during BPF load,
         // but the key is uint32, so convert back.
